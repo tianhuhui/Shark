@@ -33,8 +33,6 @@
 #define SHARK_LINALG_BLAS_KERNELS_CBLAS_TRMM_HPP
 
 #include "cblas_inc.hpp"
-#include "../../matrix_proxy.hpp"
-#include "../../vector_expression.hpp"
 #include <boost/mpl/bool.hpp>
 
 namespace shark {namespace blas {namespace bindings {
@@ -116,8 +114,8 @@ inline void trmm(
 
 template <bool upper, bool unit, typename MatA, typename MatB>
 void trmm(
-	matrix_expression<MatA> const& A,
-	matrix_expression<MatB>& B,
+	matrix_expression<MatA, cpu_tag> const& A,
+	matrix_expression<MatB, cpu_tag>& B,
 	boost::mpl::true_
 ){
 	SIZE_CHECK(A().size1() == A().size2());
@@ -137,12 +135,14 @@ void trmm(
 		cblasUplo=  upper?CblasLower:CblasUpper;
 	}
 	
+	auto storageA = A().raw_storage();
+	auto storageB = B().raw_storage();
 	trmm(stor_ordB, CblasLeft, cblasUplo, trans, cblasUnit,
 		(int)n, int(m),
-	        traits::storage(A),
-		traits::leading_dimension(A),
-	        traits::storage(B),
-	        traits::leading_dimension(B)
+		storageA.values,
+	        storageA.leading_dimension,
+		storageB.values,
+	        storageB.leading_dimension
 	);
 }
 
@@ -183,8 +183,8 @@ struct optimized_trmm_detail<
 template<class M1, class M2>
 struct  has_optimized_trmm
 : public optimized_trmm_detail<
-	typename M1::storage_category,
-	typename M2::storage_category,
+	typename M1::storage_type::storage_tag,
+	typename M2::storage_type::storage_tag,
 	typename M1::value_type,
 	typename M2::value_type
 >{};

@@ -53,7 +53,7 @@ std::size_t CMACMap::getArrayIndexForTiling(std::size_t indexOfTiling,RealVector
 	return index;
 }
 
-std::vector<std::size_t> CMACMap::getIndizes(ConstRealMatrixRow const &point)const {
+std::vector<std::size_t> CMACMap::getIndizes(blas::matrix_row< const RealMatrix> const &point)const {
 	std::vector<size_t> output(m_tilings,0);
 
 	for (size_t tiling = 0; tiling != m_tilings; ++tiling) {
@@ -124,17 +124,6 @@ void CMACMap::eval(RealMatrix const& patterns,RealMatrix &output) const{
 	std::size_t numPatterns = patterns.size1();
 	output.resize(numPatterns,m_outputSize);
 	output.clear();
-	//todo: fix axpy_prod for sparse matrix before trying this again...
-	//create feature matrix for the batch. we assume that it is sparse and that tiles>>tilings
-// 	RealCompressedMatrix features(numPatterns,m_outputSize);
-// 	for(std::size_t i = 0; i != numPatterns; ++i){
-// 		std::vector<std::size_t> indizes = getIndizes(pattern);
-// 		for (std::size_t j = 0; j != m_tilings; ++j) {
-// 			features(i,j) = 1; 
-// 		}
-// 	}
-// 	
-// 	axpy_prod(features,trans(m_matrix),output,false);
 	
 	for(std::size_t i = 0; i != numPatterns; ++i){
 		std::vector<std::size_t> indizes = getIndizes(row(patterns,i));

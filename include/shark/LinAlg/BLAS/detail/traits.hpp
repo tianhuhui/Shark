@@ -33,8 +33,8 @@
 #ifndef SHARK_LINALG_BLAS_DETAIL_TRAITS_HPP
 #define SHARK_LINALG_BLAS_DETAIL_TRAITS_HPP
 
-#include "../fwd.hpp"
 #include "iterator.hpp"
+#include "evaluation_tags.hpp"
 #include "../expression_types.hpp"
 
 #include <boost/mpl/eval_if.hpp>
@@ -45,6 +45,82 @@
 
 namespace shark {
 namespace blas {
+	
+// forward declaration
+struct row_major;
+struct column_major;
+
+struct unknown_storage{
+	typedef unknown_tag storage_tag;
+	typedef unknown_storage row_storage;
+};
+
+template<class T>
+struct dense_vector_storage{
+	typedef dense_tag storage_tag;
+	T* values;
+	std::size_t stride;
+	
+	dense_vector_storage<T> sub_region(std::size_t offset){
+		return {values+offset*stride, stride};
+	}
+};
+
+template<class T, class I>
+struct sparse_vector_storage{
+	typedef sparse_tag storage_tag;
+	T* values;
+	I* indices;
+	std::size_t nnz;
+};
+
+template<class T>
+struct dense_matrix_storage{
+	typedef dense_tag storage_tag;
+	typedef dense_vector_storage<T> row_storage;
+	T* values;
+	std::size_t leading_dimension;
+	
+	template<class Orientation>
+	dense_matrix_storage<T> sub_region(std::size_t offset1, std::size_t offset2, Orientation){
+		std::size_t offset_major = Orientation::index_M(offset1,offset2);
+		std::size_t offset_minor = Orientation::index_m(offset1,offset2);
+		return {values+offset_major*leading_dimension+offset_minor, leading_dimension};
+	}
+	
+	template<class Orientation>
+	row_storage row(std::size_t i, Orientation){
+		return {values + i * Orientation::index_M(leading_dimension,1), Orientation::index_m(leading_dimension,1)};
+	}
+	template<class Orientation>
+	row_storage diag(){
+		return {values, leading_dimension+1};
+	}
+};
+
+template<class T>
+struct packed_matrix_storage{
+	typedef packed_tag storage_tag;
+	typedef dense_vector_storage<T> row_storage;
+	T* values;
+	std::size_t nnz;
+};
+
+template<class T, class I>
+struct sparse_matrix_storage{
+	typedef sparse_tag storage_tag;
+	typedef sparse_vector_storage<T,I> row_storage;
+	T* values;
+	I* indices;
+	I* outer_indices_begin;
+	I* outer_indices_end;
+	
+	template<class Orientation>
+	row_storage row(std::size_t i, Orientation){
+		static_assert(std::is_same<Orientation,row_major>::value, "sparse matrix has wrong orientation for row/column");
+		return {values + outer_indices_begin[i], indices + outer_indices_begin[i],outer_indices_end[i] - outer_indices_begin[i]};
+	}
+};
 	
 template<class T>
 struct real_traits{
@@ -89,10 +165,7 @@ struct unit_upper{
 
 //structure types
 struct linear_structure{};
-struct packed_structure{};
-
-// forward declaration
-struct column_major;
+struct triangular_structure{};
 
 // This traits class defines storage layout and it's properties
 // matrix (i,j) -> storage [i * size_i + j]
@@ -148,14 +221,6 @@ struct row_major:public linear_structure{
 	static size_type stride2(size_type /*size_i*/, size_type /*size_j*/){
 		return 1;
 	}
-	
-	static size_type  triangular_index(size_type i, size_type j, size_type size,lower){
-		return i*(i+1)/2+j; 
-	}
-	
-	static size_type  triangular_index(size_type i, size_type j, size_type size,upper){
-		return (i*(2*size-i+1))/2+j-i; 
-	}
 };
 
 // This traits class defines storage layout and it's properties
@@ -163,6 +228,7 @@ struct row_major:public linear_structure{
 struct column_major:public linear_structure{
 	typedef std::size_t size_type;
 	typedef std::ptrdiff_t difference_type;
+	typedef column_major orientation;
 	typedef row_major transposed_orientation;
 	template<class T>
 	struct sparse_element{
@@ -211,24 +277,21 @@ struct column_major:public linear_structure{
 	static size_type stride2(size_type size_i, size_type /*size_j*/){
 		return size_i;
 	}
-	
-	static size_type  triangular_index(size_type i, size_type j, size_type size,lower){
-		return transposed_orientation::triangular_index(j,i,size,upper()); 
-	}
-	
-	static size_type  triangular_index(size_type i, size_type j, size_type size,upper){
-		return transposed_orientation::triangular_index(j,i,size,lower()); 
-	}
 };
-struct unknown_orientation:public linear_structure
-{typedef unknown_orientation transposed_orientation;};
+struct unknown_orientation:public linear_structure{
+	typedef unknown_orientation orientation;
+	typedef unknown_orientation transposed_orientation;
+};
 
 //storage schemes for packed matrices
 template<class Orientation, class TriangularType>
-struct packed:public packed_structure{
-	typedef  TriangularType triangular_type;
+struct triangular: public triangular_structure{
+public:
+	static const bool is_upper = TriangularType::is_upper;
+	static const bool is_unit = TriangularType::is_unit;
+	typedef TriangularType triangular_type;
 	typedef Orientation orientation;
-	typedef packed<
+	typedef triangular<
 		typename Orientation::transposed_orientation,
 		typename TriangularType::transposed_orientation
 	> transposed_orientation;
@@ -238,54 +301,31 @@ struct packed:public packed_structure{
 		return TriangularType::is_upper? j >= i: i >= j;
 	}
 	
-	static size_type element(size_type i, size_type j, size_type size) {
+	template<class StorageTag>
+	static size_type element(size_type i, size_type j, size_type size, StorageTag tag) {
 		SIZE_CHECK(i <= size);
 		SIZE_CHECK(j <= size);
 		//~ SIZE_CHECK( non_zero(i,j));//lets end iterators fail!
-		
-		return orientation::triangular_index(i,j,size,TriangularType());
+		return triangular_index(i,j,size,TriangularType(), Orientation(), tag);
 	}
-	
-	static size_type stride1(size_type size_i, size_type size_j){
-		return orientation::stride1(size_i,size_j);
+private:
+	static size_type  triangular_index(size_type i, size_type j, size_type size,lower, row_major, packed_tag){
+		return i*(i+1)/2+j; 
 	}
-	static size_type stride2(size_type size_i, size_type size_j){
-		return orientation::stride2(size_i,size_j);
+	static size_type  triangular_index(size_type i, size_type j, size_type size,upper, row_major, packed_tag){
+		return (i*(2*size-i+1))/2+j-i; 
+	}
+	static size_type  triangular_index(size_type i, size_type j, size_type size,lower, row_major, dense_tag){
+		return row_major::element(i,size,j,size); 
+	}
+	static size_type  triangular_index(size_type i, size_type j, size_type size,upper, row_major, dense_tag){
+		return column_major::element(i,size,j,size); 
+	}
+	template<class TriangT, class StructT>
+	static size_type  triangular_index(size_type i, size_type j, size_type size,TriangT, column_major, StructT s){
+		return triangular_index(j,i,size,typename TriangT::transposed_orientation(),row_major(), s);
 	}
 };
-
-// Storage tags -- hierarchical definition of storage characteristics
-// this gives the real storage layout of the matix in memory
-// packed_tag ->BLAS packed format and supports packed interface
-// dense_tag -> dense storage scheme an dense interface supported
-// sparse_tag -> sparse storage scheme and supports sparse interface.
-// unknown_storage_tag -> no known storage scheme, only supports basic interface
-struct unknown_storage_tag {};
-struct sparse_tag:public unknown_storage_tag{};
-struct dense_tag: public unknown_storage_tag{};
-struct packed_tag: public unknown_storage_tag{};
-
-//evaluation tags
-struct elementwise_tag{};
-struct blockwise_tag{};
-
-namespace detail{
-	template<class S1, class S2>
-	struct evaluation_restrict_traits {
-		typedef S1 type;
-	};
-	template<>
-	struct evaluation_restrict_traits<elementwise_tag, blockwise_tag> {
-		typedef blockwise_tag type;
-	};
-}
-
-template<class E1, class E2>
-struct evaluation_restrict_traits: public detail::evaluation_restrict_traits<
-	typename E1::evaluation_category,
-	typename E2::evaluation_category
->{};
-
 
 template<class E>
 struct closure: public boost::mpl::if_<
@@ -295,9 +335,12 @@ struct closure: public boost::mpl::if_<
 >{};
 	
 template<class E>
-struct const_expression{
-	typedef typename E::const_closure_type type;
-};
+struct const_expression : public boost::mpl::if_c<
+	std::is_base_of<blas::vector_container<typename std::remove_const<E>::type,typename E::device_type>, E >::value
+	||std::is_base_of<blas::matrix_container<typename std::remove_const<E>::type,typename E::device_type>, E >::value,
+	E const,
+	typename E::const_closure_type
+>{};
 
 template<class E>
 struct reference: public boost::mpl::if_<
@@ -307,16 +350,10 @@ struct reference: public boost::mpl::if_<
 >{};
 
 template<class E>
-struct pointer: public boost::mpl::if_<
+struct storage: public boost::mpl::if_<
 	std::is_const<E>,
-	typename E::const_pointer,
-	typename E::pointer
->{};
-template<class E>
-struct index_pointer: public boost::mpl::if_<
-	std::is_const<E>,
-	typename E::const_index_pointer,
-	typename E::index_pointer
+	typename E::const_storage_type,
+	typename E::storage_type
 >{};
 	
 template<class M>
@@ -360,28 +397,28 @@ namespace detail{
 	}
 }
 
-template<class M>
-typename major_iterator<M const>::type major_begin(matrix_expression<M> const& m, std::size_t i){
+template<class M, class Device>
+typename major_iterator<M const>::type major_begin(matrix_expression<M, Device> const& m, std::size_t i){
 	return detail::major_begin(m(),i, typename M::orientation());
 }
-template<class M>
-typename major_iterator<M const>::type major_end(matrix_expression<M> const& m, std::size_t i){
+template<class M, class Device>
+typename major_iterator<M const>::type major_end(matrix_expression<M, Device> const& m, std::size_t i){
 	return detail::major_end(m(),i, typename M::orientation());
 }
-template<class M>
-typename major_iterator<M>::type major_begin(matrix_expression<M>& m, std::size_t i){
+template<class M, class Device>
+typename major_iterator<M>::type major_begin(matrix_expression<M, Device>& m, std::size_t i){
 	return detail::major_begin(m(),i, typename M::orientation());
 }
-template<class M>
-typename major_iterator<M>::type major_end(matrix_expression<M>& m, std::size_t i){
+template<class M, class Device>
+typename major_iterator<M>::type major_end(matrix_expression<M, Device>& m, std::size_t i){
 	return detail::major_end(m(),i, typename M::orientation());
 }
 
-///\brief Determines a good vector type storing an expression returning values of type T and having a certain iterator category.
-template<class ValueType, class IteratorTag>
+///\brief Determines a good vector type storing an expression returning values of type T having a certain evaluation category on a specific device.
+template<class ValueType, class Cateogry, class Device>
 struct vector_temporary_type;
-///\brief Determines a good vector type storing an expression returning values of type T and having a certain iterator category.
-template<class ValueType, class Orientation, class IteratorTag>
+///\brief Determines a good vector type storing an expression returning values of type T having a certain evaluation category on a specific device.
+template<class ValueType, class Orientation, class Cateogry, class Device>
 struct matrix_temporary_type;
 
 /// For the creation of temporary vectors in the assignment of proxies
@@ -389,11 +426,8 @@ template <class E>
 struct vector_temporary{
 	typedef typename vector_temporary_type<
 		typename E::value_type,
-		typename boost::mpl::eval_if<
-			typename std::is_base_of<vector_expression<E>,E>::type,
-			boost::range_iterator<E>,
-			major_iterator<E>
-		>::type::iterator_category
+		typename E::evaluation_category::tag,
+		typename E::device_type
 	>::type type;
 };
 
@@ -403,11 +437,8 @@ struct matrix_temporary{
 	typedef typename matrix_temporary_type<
 		typename E::value_type,
 		typename E::orientation,
-		typename boost::mpl::eval_if<
-			typename std::is_base_of<vector_expression<E>,E>::type,
-			boost::range_iterator<E>,
-			major_iterator<E>
-		>::type::iterator_category
+		typename E::evaluation_category::tag,
+		typename E::device_type
 	>::type type;
 };
 
@@ -417,30 +448,27 @@ struct transposed_matrix_temporary{
 	typedef typename matrix_temporary_type<
 		typename E::value_type,
 		typename E::orientation::transposed_orientation,
-		typename boost::mpl::eval_if<
-			typename std::is_base_of<vector_expression<E>,E>::type,
-			boost::range_iterator<E>,
-			major_iterator<E>
-		>::type::iterator_category
+		typename E::evaluation_category::tag,
+		typename E::device_type
 	>::type type;
 };
 
 namespace detail{
-	template<class Matrix>
-	void ensure_size(matrix_expression<Matrix>& mat,std::size_t rows, std::size_t columns){
+	template<class Matrix, class Device>
+	void ensure_size(matrix_expression<Matrix, Device>& mat,std::size_t rows, std::size_t columns){
 		SIZE_CHECK(mat().size1() == rows);
 		SIZE_CHECK(mat().size2() == columns);
 	}
-	template<class Matrix>
-	void ensure_size(matrix_container<Matrix>& mat,std::size_t rows, std::size_t columns){
+	template<class Matrix, class Device>
+	void ensure_size(matrix_container<Matrix, Device>& mat,std::size_t rows, std::size_t columns){
 		mat().resize(rows,columns);
 	}
-	template<class Vector>
-	void ensure_size(vector_expression<Vector>& vec,std::size_t size){
+	template<class Vector, class Device>
+	void ensure_size(vector_expression<Vector, Device>& vec,std::size_t size){
 		SIZE_CHECK(vec().size() == size);
 	}
-	template<class Vector>
-	void ensure_size(vector_container<Vector>& vec,std::size_t size){
+	template<class Vector, class Device>
+	void ensure_size(vector_container<Vector, Device>& vec,std::size_t size){
 		vec().resize(size);
 	}
 }
@@ -448,15 +476,15 @@ namespace detail{
 ///\brief Ensures that the matrix has the right size.
 ///
 ///Tries to resize mat. If the matrix expression can't be resized a debug assertion is thrown.
-template<class Matrix>
-void ensure_size(matrix_expression<Matrix>& mat,std::size_t rows, std::size_t columns){
+template<class Matrix, class Device>
+void ensure_size(matrix_expression<Matrix, Device>& mat,std::size_t rows, std::size_t columns){
 	detail::ensure_size(mat(),rows,columns);
 }
 ///\brief Ensures that the vector has the right size.
 ///
 ///Tries to resize vec. If the vector expression can't be resized a debug assertion is thrown.
-template<class Vector>
-void ensure_size(vector_expression<Vector>& vec,std::size_t size){
+template<class Vector, class Device>
+void ensure_size(vector_expression<Vector, Device>& vec,std::size_t size){
 	detail::ensure_size(vec(),size);
 }
 

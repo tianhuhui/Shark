@@ -48,14 +48,7 @@
 #include <shark/Data/Dataset.h>
 #include <shark/Models/Kernels/LinearKernel.h>
 
-#include <shark/Algorithms/Trainers/McSvmOVATrainer.h>
-#include <shark/Algorithms/Trainers/McSvmMMRTrainer.h>
-#include <shark/Algorithms/Trainers/McSvmCSTrainer.h>
-#include <shark/Algorithms/Trainers/McSvmWWTrainer.h>
-#include <shark/Algorithms/Trainers/McSvmLLWTrainer.h>
-#include <shark/Algorithms/Trainers/McSvmADMTrainer.h>
-#include <shark/Algorithms/Trainers/McSvmATSTrainer.h>
-#include <shark/Algorithms/Trainers/McSvmATMTrainer.h>
+#include <shark/Algorithms/Trainers/CSvmTrainer.h>
 
 
 using namespace shark;
@@ -81,6 +74,87 @@ void ZeroSum(RealMatrix& mat)
 // test case.
 BOOST_AUTO_TEST_SUITE (Algorithms_Trainers_LinearSvmTrainer)
 
+
+BOOST_AUTO_TEST_CASE( Binary_CSVM_TRAINER_TEST )
+{
+	size_t dim = 5;
+	size_t ell = 200;
+
+	double C = 1.0;
+	LinearKernel<CompressedRealVector> kernel;
+
+	LinearCSvmTrainer<CompressedRealVector> linNoBias(C,false);
+	LinearCSvmTrainer<CompressedRealVector> linBias(C,true);
+	CSvmTrainer<CompressedRealVector> kerNoBias(&kernel, C,false);
+	CSvmTrainer<CompressedRealVector> kerBias(&kernel, C,true);
+	
+	linNoBias.stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
+	linBias.stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
+	kerNoBias.stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
+	kerBias.stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
+
+	for (unsigned int run=0; run<10; run++)
+	{
+		// generate random training set
+		Rng::seed(run);
+		cout << endl << "generating test problem " << (run+1) << " out of 10" << endl;
+		vector<CompressedRealVector> input(ell, CompressedRealVector(dim));
+		vector<unsigned int> target(ell);
+		for (size_t i=0; i<ell; i++)
+		{
+			unsigned int label = Rng::coinToss();
+			for (unsigned int d=0; d<dim; d++)
+			{
+				input[i](d) = 0.3 * Rng::gauss() + 2*label-1;
+			}
+			target[i] = label;
+		}
+		LabeledData<CompressedRealVector, unsigned int> dataset = createLabeledDataFromRange(input, target);
+
+		// train machines
+		LinearClassifier<CompressedRealVector> linearNoBias;
+		LinearClassifier<CompressedRealVector> linearBias;
+		linNoBias.train(linearNoBias,dataset);
+		linBias.train(linearBias,dataset);
+		
+		KernelClassifier<CompressedRealVector> nonlinearNoBias;
+		KernelClassifier<CompressedRealVector> nonlinearBias;
+		kerNoBias.train(nonlinearNoBias,dataset);
+		kerBias.train(nonlinearBias,dataset);
+
+		// extract weight matrices
+		RealMatrix linear_w_noBias = linearNoBias.decisionFunction().matrix();
+		RealMatrix linear_w_Bias = linearBias.decisionFunction().matrix();
+		RealMatrix nonlinear_w_noBias(1, dim);
+		RealMatrix nonlinear_w_Bias(1, dim);
+		for (size_t j=0; j<dim; j++)
+		{
+			CompressedRealVector v(dim);
+			v(j) = 1.0;
+			column(nonlinear_w_noBias, j) = nonlinearNoBias.decisionFunction()(v);
+			column(nonlinear_w_Bias, j) = nonlinearBias.decisionFunction()(v)-nonlinearBias.decisionFunction().offset();
+		}
+		
+		std::cout<<linearBias.decisionFunction().offset()<<" "<<nonlinearBias.decisionFunction().offset()<<std::endl;
+
+		// output weight vectors for manual inspection
+		cout << "      linear trainer weight vectors: " << endl;
+		cout << "        " << row(linear_w_noBias, 0) << endl;
+		cout << "        " << row(linear_w_Bias, 0) << endl;
+		cout << "      nonlinear trainer weight vectors: " << endl;
+		cout << "        " << row(nonlinear_w_noBias, 0) << endl;
+		cout << "        " << row(nonlinear_w_Bias, 0) << endl;
+
+		// compare weight vectors
+		double n_noBias = norm_2(row(linear_w_noBias, 0));
+		double n_Bias = norm_2(row(linear_w_Bias, 0));
+		double d_noBias = norm_2(row(linear_w_noBias, 0) - row(nonlinear_w_noBias, 0));
+		double d_Bias = norm_2(row(linear_w_Bias, 0) - row(nonlinear_w_Bias, 0));
+		BOOST_CHECK_SMALL(d_noBias, RELATIVE_ACCURACY * n_noBias);
+		BOOST_CHECK_SMALL(d_Bias, RELATIVE_ACCURACY * n_Bias);
+	}
+}
+
 BOOST_AUTO_TEST_CASE( MCSVM_TRAINER_TEST )
 {
 	size_t classes = 5;
@@ -92,21 +166,18 @@ BOOST_AUTO_TEST_CASE( MCSVM_TRAINER_TEST )
 	double C = 1.0;
 	LinearKernel<CompressedRealVector> kernel;
 
-	AbstractLinearSvmTrainer<CompressedRealVector>* linearTrainer[8];
-	AbstractSvmTrainer<CompressedRealVector, unsigned int>* nonlinearTrainer[8];
-
-#define TRAINER(index, kind) \
-	linearTrainer[index] = new LinearMcSvm##kind##Trainer<CompressedRealVector>(C); \
-	nonlinearTrainer[index] = new McSvm##kind##Trainer<CompressedRealVector>(&kernel, C,false);
-
-	TRAINER(0, MMR);
-	TRAINER(1, OVA);
-	TRAINER(2, WW);
-	TRAINER(3, CS);
-	TRAINER(4, LLW);
-	TRAINER(5, ADM);
-	TRAINER(6, ATS);
-	TRAINER(7, ATM);
+	// There are 9 trainers for multi-class SVMs in Shark which can train with or without bias:
+	std::pair<std::string,McSvm> machines[9] ={
+		{"OVA", McSvm::OVA},
+		{"CS", McSvm::CS},
+		{"WW",McSvm::WW},
+		{"LLW",McSvm::LLW},
+		{"ADM",McSvm::ADM},
+		{"ATS",McSvm::ATS},
+		{"ATM",McSvm::ATM},
+		{"MMR",McSvm::MMR},
+		{"Reinforced",McSvm::ReinforcedSvm},
+	};
 
 	for (unsigned int run=0; run<10; run++)
 	{
@@ -127,17 +198,22 @@ BOOST_AUTO_TEST_CASE( MCSVM_TRAINER_TEST )
 		}
 		LabeledData<CompressedRealVector, unsigned int> dataset = createLabeledDataFromRange(input, target);
 
-		for (size_t i=0; i<8; i++)
+		for (size_t i=0; i<9; i++)
 		{
-			cout << "  testing " << linearTrainer[i]->name() << " vs. " << nonlinearTrainer[i]->name() << endl;
+			cout << "  testing linear vs non-linear " << machines[i].first << " -machine"<< endl;
+			LinearCSvmTrainer<CompressedRealVector> linearTrainer(C, false);
+			CSvmTrainer<CompressedRealVector> nonlinearTrainer(&kernel, C,false);
+			linearTrainer.setMcSvmType(machines[i].second);
+			nonlinearTrainer.setMcSvmType(machines[i].second);
+			
 
 			// train machine with two trainers
 			LinearClassifier<CompressedRealVector> linear;
-			linearTrainer[i]->stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
-			linearTrainer[i]->train(linear, dataset);
+			linearTrainer.stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
+			linearTrainer.train(linear, dataset);
 			KernelClassifier<CompressedRealVector> nonlinear;
-			nonlinearTrainer[i]->stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
-			nonlinearTrainer[i]->train(nonlinear, dataset);
+			nonlinearTrainer.stoppingCondition().minAccuracy = MAX_KKT_VIOLATION;
+			nonlinearTrainer.train(nonlinear, dataset);
 
 			// extract weight matrices
 			RealMatrix linear_w = linear.decisionFunction().matrix();

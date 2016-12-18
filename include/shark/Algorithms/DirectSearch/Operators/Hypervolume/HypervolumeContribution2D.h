@@ -49,13 +49,13 @@ private:
 		, f2(f2)
 		, index(index)
 		{}
-			
+
 		bool operator<(Point const& rhs) const{//for lexicographic sorting
 			if (f1 < rhs.f1) return true;
 			if (f1 > rhs.f1) return false;
-			return (f2 < rhs.f1);
+			return (f2 < rhs.f2);
 		}
-		
+
 		double f1;
 		double f2;
 		std::size_t index;

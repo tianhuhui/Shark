@@ -77,26 +77,27 @@ inline void trsv(
 
 // trsv(): solves A system of linear equations A * x = b
 //             when A is A triangular matrix.
-template <bool Upper,bool Unit,typename TriangularA, typename V>
+template <bool Upper,bool Unit,typename MatA, typename V>
 void trsv(
-	matrix_expression<TriangularA> const &A, 
-	vector_expression<V> &b,
+	matrix_expression<MatA, cpu_tag> const &A, 
+	vector_expression<V, cpu_tag> &b,
 	boost::mpl::true_
 ){
 	SIZE_CHECK(A().size1() == A().size2());
 	SIZE_CHECK(A().size1()== b().size());
 	CBLAS_DIAG cblasUnit = Unit?CblasUnit:CblasNonUnit;
-	CBLAS_ORDER const storOrd= (CBLAS_ORDER)storage_order<typename TriangularA::orientation>::value;
+	CBLAS_ORDER const storOrd= (CBLAS_ORDER)storage_order<typename MatA::orientation>::value;
 	CBLAS_UPLO uplo = Upper?CblasUpper:CblasLower;
 	
 
 	int const n = A().size1();
-
+	auto storageA = A().raw_storage();
+	auto storageb = b().raw_storage();
 	trsv(storOrd, uplo, CblasNoTrans,cblasUnit, n,
-	        traits::storage(A),
-	        traits::leading_dimension(A),
-	        traits::storage(b),
-	        traits::stride(b)
+	        storageA.values,
+	        storageA.leading_dimension,
+		storageb.values,
+	        storageb.stride
 	);
 }
 
@@ -137,8 +138,8 @@ struct optimized_trsv_detail<
 template<class M, class V>
 struct  has_optimized_trsv
 : public optimized_trsv_detail<
-	typename M::storage_category,
-	typename V::storage_category,
+	typename M::storage_type::storage_tag,
+	typename V::storage_type::storage_tag,
 	typename M::value_type,
 	typename V::value_type
 >{};

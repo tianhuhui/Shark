@@ -45,20 +45,20 @@
 namespace shark{
 	
 //! Calculates the mean and variance values of the input data
-template<class Vec1T,class Vec2T,class Vec3T>
+template<class Vec1T,class Vec2T,class Vec3T, class Device>
 void meanvar
 (
-	const Data<Vec1T>& data,
-	blas::vector_container<Vec2T>& mean,
-	blas::vector_container<Vec3T>& variance
+	Data<Vec1T> const& data,
+	blas::vector_container<Vec2T, Device>& mean,
+	blas::vector_container<Vec3T, Device>& variance
 );
 //! Calculates the mean, variance and covariance values of the input data
-template<class Vec1T,class Vec2T,class MatT>
+template<class Vec1T,class Vec2T,class MatT, class Device>
 void meanvar
 (
-	const Data<Vec1T>& data,
-	blas::vector_container<Vec2T>& mean,
-	blas::matrix_container<MatT>& variance
+	Data<Vec1T> const& data,
+	blas::vector_container<Vec2T, Device>& mean,
+	blas::matrix_container<MatT, Device>& variance
 );
 
 //! Calculates the mean vector of the input vectors.
@@ -72,11 +72,11 @@ VectorType mean(UnlabeledData<VectorType> const& data){
 
 //! Calculates the variance vector of the input vectors
 template<class VectorType>
-VectorType variance(const Data<VectorType>& data);
+VectorType variance(Data<VectorType> const& data);
 
 //! Calculates the covariance matrix of the data vectors
 template<class VectorType>
-typename VectorMatrixTraits<VectorType>::DenseMatrixType covariance(const Data<VectorType>& data);
+blas::matrix<typename VectorType::value_type> covariance(Data<VectorType> const& data);
 	
 }
 /** @}*/

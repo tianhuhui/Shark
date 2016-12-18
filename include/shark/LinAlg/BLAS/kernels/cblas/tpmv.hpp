@@ -33,8 +33,6 @@
 #define SHARK_LINALG_BLAS_KERNELS_CBLAS_TPMV_HPP
 
 #include "cblas_inc.hpp"
-#include "../../matrix_proxy.hpp"
-#include "../../vector_expression.hpp"
 #include <boost/mpl/bool.hpp>
 
 namespace shark {namespace blas {namespace bindings {
@@ -100,25 +98,27 @@ inline void tpmv(
 	);
 }
 
-template <typename TriangularA, typename VectorX>
+template <typename MatA, typename VectorX>
 void tpmv(
-	matrix_expression<TriangularA> const& A,
-	vector_expression<VectorX> &x,
+	matrix_expression<MatA, cpu_tag> const& A,
+	vector_expression<VectorX, cpu_tag> &x,
 	boost::mpl::true_
 ){
 	SIZE_CHECK(x().size() == A().size2());
 	SIZE_CHECK(A().size2() == A().size1());
-	bool upper = TriangularA::orientation::triangular_type::is_upper;
-	bool unit = TriangularA::orientation::triangular_type::is_unit;
+	bool upper = MatA::orientation::triangular_type::is_upper;
+	bool unit = MatA::orientation::triangular_type::is_unit;
 	std::size_t n = A().size1();
 	CBLAS_DIAG cblasUnit = unit?CblasUnit:CblasNonUnit;
 	CBLAS_UPLO cblasUplo = upper?CblasUpper:CblasLower;
-	CBLAS_ORDER stor_ord= (CBLAS_ORDER)storage_order<typename TriangularA::orientation::orientation>::value;
+	CBLAS_ORDER stor_ord= (CBLAS_ORDER)storage_order<typename MatA::orientation::orientation>::value;
 	
+	auto storageA = A().raw_storage();
+	auto storagex = x().raw_storage();
 	tpmv(stor_ord, cblasUplo, CblasNoTrans, cblasUnit, (int)n,
-	        traits::storage(A),
-	        traits::storage(x),
-	        traits::stride(x)
+	        storageA.values,
+		storagex.values,
+	        storagex.stride
 	);
 }
 
@@ -159,8 +159,8 @@ struct optimized_tpmv_detail<
 template<class M, class V>
 struct  has_optimized_tpmv
 : public optimized_tpmv_detail<
-	typename M::storage_category,
-	typename V::storage_category,
+	typename M::storage_type::storage_tag,
+	typename V::storage_type::storage_tag,
 	typename M::value_type,
 	typename V::value_type
 >{};

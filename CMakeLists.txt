@@ -93,12 +93,15 @@ set( CPACK_DEBIAN_PACKAGE_MAINTAINER "Christian Igel <c.igel@ieee.org>" )
 #    Adjust include, lib, example and doc paths for installation
 #####################################################################
 if( UNIX )
-	set( SHARK_INSTALL_INCLUDE_DIR include/ )
-	set( SHARK_INSTALL_LIB_DIR lib/ )
-	set( SHARK_INSTALL_CONTRIB_DIR share/shark/contrib/ )
-	set( SHARK_INSTALL_EXAMPLE_DIR share/shark/examples/ )
-	set( SHARK_INSTALL_DOC_DIR share/shark/doc/ )
+	include(GNUInstallDirs)
+	set( SHARK_INSTALL_BIN_DIR ${CMAKE_INSTALL_BINDIR} CACHE STRING "" )
+	set( SHARK_INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE STRING "" )
+	set( SHARK_INSTALL_LIB_DIR ${CMAKE_INSTALL_LIBDIR} CACHE STRING "" )
+	set( SHARK_INSTALL_CONTRIB_DIR ${CMAKE_INSTALL_DATADIR}/shark/contrib CACHE STRING "" )
+	set( SHARK_INSTALL_EXAMPLE_DIR ${CMAKE_INSTALL_DATADIR}/shark/examples CACHE STRING "" )
+	set( SHARK_INSTALL_DOC_DIR ${CMAKE_INSTALL_DATADIR}/shark/doc CACHE STRING "" )
 else()
+	set( SHARK_INSTALL_BIN_DIR bin )
 	set( SHARK_INSTALL_INCLUDE_DIR include/shark/ )
 	set( SHARK_INSTALL_LIB_DIR lib/ )
 	set( SHARK_INSTALL_CONTRIB_DIR contrib/ )
@@ -196,9 +199,8 @@ mark_as_advanced(HDF5_DIR)
 if(HDF5_FOUND)
 	if(HDF5_C_COMPILER_EXECUTABLE AND HDF5_CXX_COMPILER_EXECUTABLE)
 		message(STATUS "Checking HDF5 installation: HDF5 installation seems ok.")
-		include_directories( ${HDF5_INCLUDE_DIR} )
-		link_directories( ${HDF5_LIBRARY_DIR} )
-		list(APPEND LINK_LIBRARIES ${HDF5_LIBRARIES})
+		include_directories( ${HDF5_INCLUDE_DIRS} )
+		list(APPEND LINK_LIBRARIES ${HDF5_LIBRARIES} ${HDF5_HL_LIBRARIES})
 	else()
 		message(STATUS "Checking HDF5 installation:HDF5 package might be broken.")
 		if(NOT( HDF5_C_COMPILER_EXECUTABLE))
@@ -230,16 +232,16 @@ if( ENABLE_CBLAS )
 	else()
 		#todo: do a propper vendor check
 		find_library(OPENBLAS_LIBRARY openblas
-			HINTS ${CBLAS_ROOT}/lib /opt/local/lib
+			HINTS ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib/openblas-base
 		)
-		find_library(CBLAS_LIBRARY cblas
-			HINTS ${ATLAS_ROOT}/lib ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib64/atlas/
+		find_library(CBLAS_LIBRARY blas
+			HINTS ${ATLAS_ROOT}/lib ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib64/atlas/ /usr/lib/libblas
 		)
 		find_library(CLAPACK_LIBRARY lapack
-			HINTS ${ATLAS_ROOT}/lib ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib64/atlas/
+			HINTS ${ATLAS_ROOT}/lib ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib64/atlas/ /usr/lib/lapack
 		)
 		find_library(ATLAS_LIBRARY atlas
-			HINTS ${ATLAS_ROOT}/lib ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib64/atlas/
+			HINTS ${ATLAS_ROOT}/lib ${CBLAS_ROOT}/lib /opt/local/lib /usr/lib64/atlas/ /usr/lib/atlas-base
 		)
 		mark_as_advanced(
 			OPENBLAS_LIBRARY

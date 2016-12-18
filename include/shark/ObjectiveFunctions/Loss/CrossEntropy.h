@@ -141,7 +141,7 @@ public:
 			double error = 0;
 			for(std::size_t i = 0; i != prediction.size1(); ++i){
 				RANGE_CHECK ( target(i) < prediction.size2() );
-				RealMatrixRow gradRow=row(gradient,i);
+				auto gradRow=row(gradient,i);
 				
 				//calculate the log norm in a numerically stable way
 				//we subtract the maximum prior to exponentiation to 
@@ -185,12 +185,10 @@ public:
 		}
 	}
 
-	double evalDerivative (
-		unsigned int const& target,
-		RealVector const& prediction,
-		RealVector& gradient,
-		RealMatrix& hessian
-	) const{
+	double evalDerivative(
+		ConstLabelReference target, ConstOutputReference prediction,
+		OutputType& gradient,MatrixType & hessian
+	) const {
 		gradient.resize(prediction.size());
 		hessian.resize(prediction.size(),prediction.size());
 		if ( prediction.size() == 1 )

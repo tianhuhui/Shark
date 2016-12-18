@@ -32,15 +32,15 @@
 #ifndef SHARK_LINALG_BLAS_KERNELS_DEFAULT_SYEV_HPP
 #define SHARK_LINALG_BLAS_KERNELS_DEFAULT_SYEV_HPP
 
-#include "../traits.hpp"
+#include "../../detail/traits.hpp"
 
 namespace shark { namespace blas { namespace bindings {
 	
-template <typename MatrA, typename VectorB>
+template <typename MatA, typename V>
 void eigensort
 (
-	matrix_expression<MatrA>& matA,
-	vector_expression<VectorB>& eigenValues
+	matrix_expression<MatA, cpu_tag>& matA,
+	vector_expression<V, cpu_tag>& eigenValues
 ){
 	SIZE_CHECK(eigenValues().size() == matA().size1());
 	SIZE_CHECK(matA().size1() == matA().size2());
@@ -61,10 +61,10 @@ void eigensort
 	}
 }
 
-template <typename MatrA, typename VectorB>
+template <typename MatA, typename V>
 void syev(
-	matrix_expression<MatrA>& vmatA,
-	vector_expression<VectorB>& dvecA
+	matrix_expression<MatA, cpu_tag>& vmatA,
+	vector_expression<V, cpu_tag>& dvecA
 ) {
 	SIZE_CHECK(vmatA().size1() == vmatA().size2());
 	SIZE_CHECK(vmatA().size1() == dvecA().size());

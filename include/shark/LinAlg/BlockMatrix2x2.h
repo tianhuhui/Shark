@@ -2,7 +2,7 @@
 /*!
  * 
  *
- * \brief       Precomputed version of a matrix for quadratic programming
+ * \brief       Kernel matrix for SVM regression.
  * 
  * 
  * \par
@@ -104,7 +104,7 @@ public:
     /// \brief Computes the kernel-matrix
     template<class M>
     void matrix(
-        blas::matrix_expression<M> & storage
+        blas::matrix_expression<M, blas::cpu_tag> & storage
     ) const{
         for(std::size_t i = 0; i != size(); ++i){
             for(std::size_t j = 0; j != size(); ++j){

@@ -5,7 +5,7 @@
 #include <shark/ObjectiveFunctions/Loss/ZeroOneLoss.h>
 #include <shark/Data/DataDistribution.h>
 //###begin<includes>
-#include <shark/Algorithms/Trainers/McSvmOVATrainer.h>
+#include <shark/Algorithms/Trainers/CSvmTrainer.h>
 //###end<includes>
 
 using namespace shark;
@@ -14,7 +14,6 @@ using namespace shark;
 double const noise = 1.0;
 typedef CompressedRealVector VectorType;
 typedef CompressedRealMatrix MatrixType;
-typedef CompressedRealMatrixRow RowType;
 
 
 // data generating distribution for our toy
@@ -62,7 +61,8 @@ int main(int argc, char** argv)
 	// train the machine
 	std::cout << "machine training ..." << std::endl;
 //###begin<trainer>
-	LinearMcSvmOVATrainer<VectorType> trainer(C, epsilon);
+	LinearCSvmTrainer<VectorType> trainer(C, epsilon);
+	trainer.setMcSvmType(McSvm::OVA);
 //###end<trainer>
 	trainer.train(svm, training);
 	std::cout << "done." << std::endl;

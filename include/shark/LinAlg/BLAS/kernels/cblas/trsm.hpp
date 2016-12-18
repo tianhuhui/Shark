@@ -81,10 +81,10 @@ inline void trsm(
 
 // trsm(): solves A system of linear equations A * X = B
 //             when A is A triangular matrix
-template <bool upper, bool unit,typename TriangularA, typename MatB>
+template <bool upper, bool unit,typename MatA, typename MatB>
 void trsm(
-	matrix_expression<TriangularA> const &A,
-	matrix_expression<MatB> &B,
+	matrix_expression<MatA, cpu_tag> const &A,
+	matrix_expression<MatB, cpu_tag> &B,
 	boost::mpl::true_
 ){
 	SIZE_CHECK(A().size1() == A().size2());
@@ -93,7 +93,7 @@ void trsm(
 	//orientation is defined by the second argument
 	CBLAS_ORDER const storOrd = (CBLAS_ORDER)storage_order<typename MatB::orientation>::value;
 	//if orientations do not match, wecan interpret this as transposing A
-	bool transposeA =  !traits::same_orientation(A,B);
+	bool transposeA =  !std::is_same<typename MatA::orientation,typename MatB::orientation>::value;
 	
 	CBLAS_DIAG cblasUnit = unit?CblasUnit:CblasNonUnit;
 	CBLAS_UPLO cblasUplo = (upper != transposeA)?CblasUpper:CblasLower;
@@ -103,12 +103,13 @@ void trsm(
 	
 	int m = B().size1();
 	int nrhs = B().size2();
-	
+	auto storageA = A().raw_storage();
+	auto storageB = B().raw_storage();
 	trsm(storOrd, cblasUplo, transA, CblasLeft,cblasUnit, m, nrhs,
-		traits::storage(A),
-		traits::leading_dimension(A),
-		traits::storage(B),
-		traits::leading_dimension(B)
+		storageA.values,
+	        storageA.leading_dimension,
+		storageB.values,
+	        storageB.leading_dimension
 	);
 }
 
@@ -149,8 +150,8 @@ struct optimized_trsm_detail<
 template<class M1, class M2>
 struct  has_optimized_trsm
 : public optimized_trsm_detail<
-	typename M1::storage_category,
-	typename M2::storage_category,
+	typename M1::storage_type::storage_tag,
+	typename M2::storage_type::storage_tag,
 	typename M1::value_type,
 	typename M2::value_type
 >{};

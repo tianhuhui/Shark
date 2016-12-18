@@ -64,8 +64,11 @@ shark_add_test( LinAlg/BLAS/compressed_matrix.cpp BLAS_Compressed_Matrix)
 shark_add_test( LinAlg/BLAS/vector_proxy.cpp BLAS_Vector_Proxy)
 shark_add_test( LinAlg/BLAS/matrix_proxy.cpp BLAS_Matrix_Proxy)
 shark_add_test( LinAlg/BLAS/vector_expression.cpp BLAS_Vector_Expression)
-shark_add_test( LinAlg/BLAS/axpy_prod.cpp BLAS_Axpy_Prod)
+shark_add_test( LinAlg/BLAS/matrix_expression.cpp BLAS_Matrix_Expression)
+shark_add_test( LinAlg/BLAS/prod.cpp BLAS_Prod)
+shark_add_test( LinAlg/BLAS/expression_optimizer.cpp BLAS_Expression_Optimizer)
 shark_add_test( LinAlg/BLAS/triangular_prod.cpp BLAS_Triangular_Prod)
+shark_add_test( LinAlg/BLAS/transformations.cpp BLAS_Transformations)
 
 # LinAlg Tests
 shark_add_test( LinAlg/DiagonalMatrix.cpp LinAlg_DiagonalMatrix)
@@ -76,12 +79,10 @@ shark_add_test( LinAlg/rotations.cpp LinAlg_rotations )
 shark_add_test( LinAlg/permute.cpp LinAlg_Permutations )
 shark_add_test( LinAlg/KernelMatrix.cpp LinAlg_KernelMatrix )
 shark_add_test( LinAlg/Metrics.cpp LinAlg_Metrics)
-shark_add_test( LinAlg/RQ.cpp LinAlg_RQ )
 shark_add_test( LinAlg/eigensymm.cpp LinAlg_eigensymm )
-shark_add_test( LinAlg/svd.cpp LinAlg_svd )
 shark_add_test( LinAlg/choleskyDecomposition.cpp LinAlg_choleskyDecomposition)
 shark_add_test( LinAlg/solve.cpp LinAlg_solve)
-shark_add_test( LinAlg/BLAS/transformations.cpp BLAS_Transformations)
+
 shark_add_test( LinAlg/Initialize.cpp LinAlg_Initialize)
 shark_add_test( LinAlg/LRUCache.cpp LinAlg_LRUCache )
 shark_add_test( LinAlg/PartlyPrecomputedMatrix.cpp LinAlg_PartlyPrecomputedMatrix )
@@ -123,6 +124,7 @@ shark_add_test( Algorithms/GradientDescent/SteepestDescent.cpp GradDesc_Steepest
 
 # Trainers
 shark_add_test( Algorithms/Trainers/CSvmTrainer.cpp Trainers_CSvmTrainer )
+shark_add_test( Algorithms/Trainers/RankingSvmTrainer.cpp Trainers_RankingSvmTrainer )
 shark_add_test( Algorithms/Trainers/FisherLDA.cpp Trainers_FisherLDA )
 shark_add_test( Algorithms/Trainers/KernelMeanClassifier.cpp Trainers_KernelMeanClassifier )
 shark_add_test( Algorithms/Trainers/EpsilonSvmTrainer.cpp Trainers_EpsilonSvmTrainer )
@@ -130,6 +132,8 @@ shark_add_test( Algorithms/Trainers/OneClassSvmTrainer.cpp Trainers_OneClassSvmT
 shark_add_test( Algorithms/Trainers/RegularizationNetworkTrainer.cpp Trainers_RegularizationNetworkTrainer )
 shark_add_test( Algorithms/Trainers/LDA.cpp Trainers_LDA )
 shark_add_test( Algorithms/Trainers/LinearRegression.cpp Trainers_LinearRegression )
+shark_add_test( Algorithms/Trainers/LinearSAGTrainer.cpp Trainers_LinearSAGTrainer )
+shark_add_test( Algorithms/Trainers/LassoRegression.cpp Trainers_LassoRegression )
 shark_add_test( Algorithms/Trainers/McSvmTrainer.cpp Trainers_McSvmTrainer )
 shark_add_test( Algorithms/Trainers/LinearSvmTrainer.cpp Trainers_LinearSvmTrainer )
 shark_add_test( Algorithms/Trainers/NBClassifierTrainerTests.cpp Trainers_NBClassifier )
@@ -208,6 +212,7 @@ shark_add_test( Core/Math.cpp Core_Math )
 
 # Data Tests
 shark_add_test( Data/Csv.cpp Data_Csv )
+shark_add_test( Data/Download.cpp Data_Download )
 shark_add_test( Data/Bootstrap.cpp Data_Bootstrap )
 shark_add_test( Data/CVDatasetTools.cpp Data_CVDatasetTools )
 shark_add_test( Data/Dataset.cpp Data_Dataset )
@@ -275,9 +280,20 @@ shark_add_test( RBM/PCDTraining.cpp RBM_PCDTraining)
 shark_add_test( RBM/ContrastiveDivergenceTraining.cpp RBM_ContrastiveDivergenceTraining)
 shark_add_test( RBM/ExactGradientTraining.cpp RBM_ExactGradientTraining)
 
+
+#marking tests as slow
+set_tests_properties( DirectSearch_HypervolumeContribution PROPERTIES LABELS "slow" )
+set_tests_properties( Models_CMAC PROPERTIES LABELS "slow" )
+set_tests_properties( ObjFunct_KernelBasisDistance PROPERTIES LABELS "slow" )
+
 # Copy test file
 if(HDF5_FOUND)
-	file( COPY test_data/ DESTINATION test_data/ )
+    add_custom_command(
+        TARGET Data_HDF5
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test_data
+            ${CMAKE_CURRENT_BINARY_DIR}/test_data
+    )
 endif()
 
 # Create output dir

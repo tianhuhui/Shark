@@ -115,33 +115,36 @@ inline void gemm(
 }
 
 // C <- alpha * A * B + beta * C
-template <typename MatrA, typename MatrB, typename MatrC>
+template <typename MatA, typename MatB, typename MatC>
 void gemm(
-	matrix_expression<MatrA> const &matA,
-	matrix_expression<MatrB> const &matB,
-	matrix_expression<MatrC>& matC, 
-	typename MatrC::value_type alpha,
+	matrix_expression<MatA, cpu_tag> const& A,
+	matrix_expression<MatB, cpu_tag> const& B,
+	matrix_expression<MatC, cpu_tag>& C, 
+	typename MatC::value_type alpha,
 	boost::mpl::true_
 ) {
-	SIZE_CHECK(matA().size1() == matC().size1());
-	SIZE_CHECK(matB().size2() == matC().size2());
-	SIZE_CHECK(matA().size2()== matB().size1());
+	SIZE_CHECK(A().size1() == C().size1());
+	SIZE_CHECK(B().size2() == C().size2());
+	SIZE_CHECK(A().size2()== B().size1());
 	
-	CBLAS_TRANSPOSE transA = traits::same_orientation(matA,matC)?CblasNoTrans:CblasTrans;
-	CBLAS_TRANSPOSE transB = traits::same_orientation(matB,matC)?CblasNoTrans:CblasTrans;
-	std::size_t m = matC().size1();
-	std::size_t n = matC().size2();
-	std::size_t k = matA().size2();
-	CBLAS_ORDER stor_ord = (CBLAS_ORDER) storage_order<typename MatrC::orientation >::value;
+	CBLAS_TRANSPOSE transA = std::is_same<typename MatA::orientation,typename MatC::orientation>::value?CblasNoTrans:CblasTrans;
+	CBLAS_TRANSPOSE transB = std::is_same<typename MatB::orientation,typename MatC::orientation>::value?CblasNoTrans:CblasTrans;
+	std::size_t m = C().size1();
+	std::size_t n = C().size2();
+	std::size_t k = A().size2();
+	CBLAS_ORDER stor_ord = (CBLAS_ORDER) storage_order<typename MatC::orientation >::value;
 
+	auto storageA = A().raw_storage();
+	auto storageB = B().raw_storage();
+	auto storageC = C().raw_storage();
 	gemm(stor_ord, transA, transB, (int)m, (int)n, (int)k, alpha,
-		traits::storage(matA()),
-		traits::leading_dimension(matA()),
-		traits::storage(matB()),
-		traits::leading_dimension(matB()),
-		typename MatrC::value_type(1),
-		traits::storage(matC()),
-		traits::leading_dimension(matC())
+		storageA.values,
+	        storageA.leading_dimension,
+		storageB.values,
+	        storageB.leading_dimension,
+		typename MatC::value_type(1),
+		storageC.values,
+	        storageC.leading_dimension
 	);
 }
 
@@ -183,9 +186,9 @@ struct optimized_gemm_detail<
 template<class M1, class M2, class M3>
 struct  has_optimized_gemm
 : public optimized_gemm_detail<
-	typename M1::storage_category,
-	typename M2::storage_category,
-	typename M3::storage_category,
+	typename M1::storage_type::storage_tag,
+	typename M2::storage_type::storage_tag,
+	typename M3::storage_type::storage_tag,
 	typename M1::value_type,
 	typename M2::value_type,
 	typename M3::value_type

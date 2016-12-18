@@ -33,7 +33,7 @@
 
 template<class MatrixL>
 std::size_t shark::blas::pivotingCholeskyDecompositionInPlace(
-	shark::blas::matrix_expression<MatrixL> &Lref,
+	shark::blas::matrix_expression<MatrixL, cpu_tag> &Lref,
 	PermutationMatrix& P
 ){
 	
@@ -91,7 +91,7 @@ std::size_t shark::blas::pivotingCholeskyDecompositionInPlace(
 		for(std::size_t j = 0; j != currentSize; ++j){
 			//update pivot values
 			if(j > 0){
-				subrange(pivots,j,pivots.size()) -= sqr(unitTriangularColumn(Lk,j-1));
+				subrange(pivots,j,pivots.size()) -= sqr(subrange(column(Lk,j-1),j,pivots.size()));
 			}
 			//get current pivot. if it is not equal to the j-th, we swap rows and columns
 			//such that j == pivot and Lk(j,j) = pivots(pivot)
@@ -116,8 +116,9 @@ std::size_t shark::blas::pivotingCholeskyDecompositionInPlace(
 			Lk(j,j) = std::sqrt(pivotValue);
 			//the last updates of columns k...k+j-1 did not change
 			//this row, so do it now
+			Blocking<SubL> LkBlocked(Lk,j+1,j);
 			if(j > 0){
-				Blocking<SubL> LkBlocked(Lk,j+1,j);
+				
 				//suppose you are the j-th column
 				//than you want to get updated by the last
 				//outer products which are induced by your column friends
@@ -126,22 +127,20 @@ std::size_t shark::blas::pivotingCholeskyDecompositionInPlace(
 				//(L1L1T)^(j)+...+(Lj-1Lj-1)^(j)
 				//=L1*L1j+L2*L2j+L3*L3j...
 				//which is a matrix-vector product
-				unitTriangularColumn(Lk,j) -= prod(
+				column(LkBlocked.lowerRight(),0) -= prod(
 					LkBlocked.lowerLeft(),
 					subrange(row(Lk,j),0,j)
 				);
 			}
-			unitTriangularColumn(Lk,j) /= Lk(j,j);
+			column(LkBlocked.lowerRight(),0) /= Lk(j,j);
 			//set block L12 to 0
 			subrange(Lk,j,j+1,j+1,Lk.size2()).clear();
 		}
 		Blocking<SubL> LkBlocked(Lk,currentSize,currentSize);
 		//if we are not finished do the block update
 		if(k+currentSize < m){
-			symm_prod(
-				LkBlocked.lowerLeft(),
-				LkBlocked.lowerRight(),
-				false,-1.0
+			noalias(LkBlocked.lowerRight()) -= prod(
+				LkBlocked.lowerLeft(),trans(LkBlocked.lowerLeft())
 			);
 		}
 	}

@@ -28,84 +28,13 @@
 #define SHARK_LINALG_IMPL_SOLVE_SYSTEM_INL
 
 //full rank indefinite solvers
-#include <shark/LinAlg/Cholesky.h>
-
-//todo implement this using ATLAS
-template<class MatT,class VecT>
-void shark::blas::solveSystemInPlace(
-	matrix_expression<MatT> const& A, 
-	vector_expression<VecT>& b
-){
-	SIZE_CHECK(A().size1() == b().size());
-	SIZE_CHECK(A().size1() == A().size2());
-	std::size_t n = A().size1();
-	
-	PermutationMatrix permutation(n);
-	MatT LUDecomposition= A();
-	
-	lu_factorize(LUDecomposition,permutation);
-	
-	swap_rows(permutation,b);
-	solveTriangularSystemInPlace<SolveAXB,unit_lower>(LUDecomposition,b);
-	solveTriangularSystemInPlace<SolveAXB,upper>(LUDecomposition,b);
-}
-template<class MatT,class Mat2T>
-void shark::blas::solveSystemInPlace(
-	matrix_expression<MatT> const& A, 
-	matrix_expression<Mat2T> & B
-){
-	SIZE_CHECK(A().size1() == B().size1());
-	SIZE_CHECK(A().size1() == A().size2());
-	std::size_t n = A().size1();
-	
-	PermutationMatrix permutation(n);
-	MatT LUDecomposition = A;
-	
-	lu_factorize(LUDecomposition,permutation);
-	
-	swap_rows(permutation,B);
-	solveTriangularSystemInPlace<SolveAXB,unit_lower>(LUDecomposition,B);
-	solveTriangularSystemInPlace<SolveAXB,upper>(LUDecomposition,B);
-}
-
-template<class MatT,class Vec1T,class Vec2T>
-void shark::blas::solveSystem(
-	matrix_expression<MatT> const& A, 
-	vector_expression<Vec1T>& x,
-	vector_expression<Vec2T> const& b
-){
-	SIZE_CHECK(A().size1() == b().size());
-	SIZE_CHECK(A().size1() == A().size2());
-	
-	ensure_size(x,A().size1());
-	noalias(x()) = b();
-	
-	solveSystemInPlace(A,x);
-}
-
-
-template<class MatT,class Mat1T,class Mat2T>
-void shark::blas::solveSystem(
-	const shark::blas::matrix_expression<MatT> & A, 
-	shark::blas::matrix_expression<Mat1T>& X,
-	const shark::blas::matrix_expression<Mat2T> & B
-){
-	SIZE_CHECK(A().size1() == B().size1());
-	SIZE_CHECK(A().size1() == A().size2());
-	
-	ensure_size(X,A().size1(),B().size2());
-	noalias(X()) = B();
-	
-	solveSystemInPlace(A,X);
-}
-
-
+#include "../Cholesky.h"
 
 // Symmetric solvers
-template<class System,class MatT,class Mat1T>
+template<class System,class MatA, class MatB, class Device>
 void shark::blas::solveSymmPosDefSystemInPlace(
-	matrix_expression<MatT> const& A, 
-	matrix_expression<Mat1T>& B
+	matrix_expression<MatA, Device> const& A, 
+	matrix_expression<MatB, Device>& B
 ){
 	if(System::left){
 		SIZE_CHECK(A().size1() == B().size1());
@@ -114,30 +43,30 @@ void shark::blas::solveSymmPosDefSystemInPlace(
 	}
 	SIZE_CHECK(A().size1() == A().size2());
 	
-	matrix<typename MatT::value_type> cholesky;
+	matrix<typename MatA::value_type> cholesky;
 	choleskyDecomposition(A(),cholesky);
 
 	solveTriangularCholeskyInPlace<System>(cholesky,B);
 }
 
-template<class System,class MatT,class VecT>
+template<class System,class MatA,class VecV, class Device>
 void shark::blas::solveSymmPosDefSystemInPlace(
-	matrix_expression<MatT> const& A, 
-	vector_expression<VecT>& b
+	matrix_expression<MatA, Device> const& A, 
+	vector_expression<VecV, Device>& b
 ){
 	SIZE_CHECK(A().size1() == b().size());
 	SIZE_CHECK(A().size1() == A().size2());
 	
-	matrix<typename MatT::value_type> cholesky;
+	matrix<typename MatA::value_type> cholesky;
 	choleskyDecomposition(A(),cholesky);
 	solveTriangularCholeskyInPlace<System>(cholesky,b);
 }
 
-template<class System,class MatT,class Vec1T,class Vec2T>
+template<class System,class MatA,class VecX,class VecV, class Device>
 void shark::blas::solveSymmPosDefSystem(
-	const matrix_expression<MatT>& A, 
-	vector_expression<Vec1T>& x,
-	const vector_expression<Vec2T>& b
+	const matrix_expression<MatA, Device>& A, 
+	vector_expression<VecX, Device>& x,
+	const vector_expression<VecV, Device>& b
 ){
 	SIZE_CHECK(A().size1() == b().size());
 	SIZE_CHECK(A().size1() == A().size2());
@@ -145,11 +74,11 @@ void shark::blas::solveSymmPosDefSystem(
 	noalias(x()) = b();
 	solveSymmPosDefSystemInPlace<System>(A,x);
 }
-template<class System,class MatT,class Mat1T,class Mat2T>
+template<class System,class MatA,class MatX,class MatB, class Device>
 void shark::blas::solveSymmPosDefSystem(
-	const matrix_expression<MatT>& A, 
-	matrix_expression<Mat1T>& X,
-	const matrix_expression<Mat2T>& B
+	const matrix_expression<MatA, Device>& A, 
+	matrix_expression<MatX, Device>& X,
+	const matrix_expression<MatB, Device>& B
 ){
 	SIZE_CHECK(A().size1() == A().size2());
 	if(System::left){
@@ -162,10 +91,10 @@ void shark::blas::solveSymmPosDefSystem(
 	solveSymmPosDefSystemInPlace<System>(A,X);
 }
 
-template<class System,class MatT,class VecT>
+template<class System,class MatA,class VecV, class Device>
 void shark::blas::solveSymmSemiDefiniteSystemInPlace(
-	matrix_expression<MatT> const& A, 
-	vector_expression<VecT>& b
+	matrix_expression<MatA, Device> const& A, 
+	vector_expression<VecV, Device>& b
 ){
 	//we will ignore the "System" parameter in the vector
 	//version as A is symmetric
@@ -207,8 +136,7 @@ void shark::blas::solveSymmSemiDefiniteSystemInPlace(
 	{
 		//complex case. 
 		//A' = L(L^TL)^-1(L^TL)^-1 L^T
-		RealMatrix LTL(rank,rank);
-		symm_prod(trans(L),LTL);
+		RealMatrix LTL = prod(trans(L),L);
 		
 		//compute z= L^Tb
 		RealVector z = prod(trans(L),b);
@@ -226,10 +154,10 @@ void shark::blas::solveSymmSemiDefiniteSystemInPlace(
 	swap_rows_inverted(permutation,b);
 }
 
-template<class System,class Mat1T,class Mat2T>
+template<class System,class MatA,class MatB, class Device>
 void shark::blas::solveSymmSemiDefiniteSystemInPlace(
-	matrix_expression<Mat1T> const& A, 
-	matrix_expression<Mat2T>& B
+	matrix_expression<MatA, Device> const& A, 
+	matrix_expression<MatB, Device>& B
 ){
 	SIZE_CHECK(A().size2() == A().size1());
 	if(System::left){
@@ -266,8 +194,7 @@ void shark::blas::solveSymmSemiDefiniteSystemInPlace(
 	{
 		//complex case. 
 		//X=L(L^TL)^-1(L^TL)^-1 L^TB
-		RealMatrix LTL(rank,rank);
-		symm_prod(trans(L),LTL);
+		RealMatrix LTL = prod(trans(L),L);
 		
 		//compute Z= L^TB
 		RealMatrix Z = prod(trans(L),B);
@@ -283,8 +210,7 @@ void shark::blas::solveSymmSemiDefiniteSystemInPlace(
 	}else{
 		//complex case. 
 		//X=BL(L^TL)^-1(L^TL)^-1 L^T
-		RealMatrix LTL(rank,rank);
-		symm_prod(trans(L),LTL);
+		RealMatrix LTL = prod(trans(L),L);
 		
 		//compute z= L^TB
 		RealMatrix Z = prod(B,L);
@@ -305,10 +231,10 @@ void shark::blas::solveSymmSemiDefiniteSystemInPlace(
 		swap_columns_inverted(permutation,B);
 }
 
-template<class System,class MatT,class VecT>
+template<class System,class MatA,class VecV, class Device>
 void shark::blas::generalSolveSystemInPlace(
-	matrix_expression<MatT> const& A, 
-	vector_expression<VecT>& b
+	matrix_expression<MatA, Device> const& A, 
+	vector_expression<VecV, Device>& b
 ){
 	if( System::left){
 		SIZE_CHECK(A().size1() == b().size());
@@ -342,10 +268,10 @@ void shark::blas::generalSolveSystemInPlace(
 	}
 }
 
-template<class System,class MatA,class MatB>
+template<class System,class MatA,class MatB, class Device>
 void shark::blas::generalSolveSystemInPlace(
-	matrix_expression<MatA> const& A, 
-	matrix_expression<MatB>& B
+	matrix_expression<MatA, Device> const& A, 
+	matrix_expression<MatB, Device>& B
 ){	
 	if( System::left){
 		SIZE_CHECK(A().size1() == B().size1());

@@ -15,20 +15,15 @@ RealMatrix createRandomInvertibleMatrix(std::size_t Dimensions,double lambdaMin,
 			lambda = Rng::uni(lambdaMin,lambdaMax);
 		row(Atemp,i)*=lambda;
 	}
-	RealMatrix A(Dimensions,Dimensions);
-	axpy_prod(R,Atemp,A);
-	return A;
+	return prod(R,Atemp);
 }
 template<class Vec,class Mat>
 RealMatrix createSymmetricMatrix(Vec const& lambda,Mat const& rotation){
 	RealMatrix intermediate=rotation;
-	RealMatrix result(rotation.size1(),rotation.size2());
-	result.clear();
 	for(std::size_t i = 0; i != intermediate.size1(); ++i){
 		row(intermediate,i) *= lambda(i);
 	}
-	axpy_prod(trans(rotation),intermediate,result);
-	return result;
+	return prod(trans(rotation),intermediate);
 }
 
 //simple test which checks for all argument combinations whether they are correctly translated
@@ -326,27 +321,6 @@ BOOST_AUTO_TEST_CASE( LinAlg_Solve_TriangularInPlace_Calls_Vector ){
 }
 
 //for the remaining functions, we can use random systems and check, whether they are okay
-BOOST_AUTO_TEST_CASE( LinAlg_Solve_Vector ){
-	unsigned int NumTests = 100;
-	std::size_t Dimensions = 50;
-	std::cout<<"blas::solveSystem vector"<<std::endl;
-	for(unsigned int testi = 0; testi != NumTests; ++testi){
-		RealMatrix A = createRandomInvertibleMatrix(Dimensions,-2,2);
-		RealVector b(Dimensions);
-		for(std::size_t i = 0; i != Dimensions; ++i){
-			b(i) = Rng::gauss(0,1);
-		}
-		
-		RealVector x;
-		blas::solveSystem(A,x,b);
-		
-		//calculate backwards
-		RealVector test = prod(A,x);
-		
-		double error = norm_inf(test-b);
-		BOOST_CHECK_SMALL(error,1.e-11);
-	}
-}
 
 BOOST_AUTO_TEST_CASE( LinAlg_Solve_Symmetric_Vector ){
 	unsigned int NumTests = 100;
@@ -407,32 +381,6 @@ BOOST_AUTO_TEST_CASE( LinAlg_Solve_Symmetric_Approximated_Vector ){
 		RealVector test = prod(A,x);
 		double error = norm_inf(test-b);
 		BOOST_CHECK_SMALL(error,1.e-12);
-	}
-}
-
-BOOST_AUTO_TEST_CASE( LinAlg_Solve_Matrix ){
-	unsigned int NumTests = 100;
-	std::size_t Dimensions = 50;
-	std::size_t numRhs = 21;
-	std::cout<<"blas::solve matrix"<<std::endl;
-	for(unsigned int testi = 0; testi != NumTests; ++testi){
-		RealMatrix A = createRandomInvertibleMatrix(Dimensions,-2,2);
-		RealMatrix B(Dimensions,numRhs);
-		for(std::size_t i = 0; i != Dimensions; ++i){
-			for(std::size_t j = 0; j != numRhs; ++j){
-				B(i,j) = Rng::gauss(0,1);
-			}
-		}
-		
-		RealMatrix X;
-		blas::solveSystem(A,X,B);
-		
-		//calculate backwards
-		RealMatrix test(Dimensions,numRhs);
-		axpy_prod(A,X,test);
-		
-		double error = norm_inf(test-B);
-		BOOST_CHECK_SMALL(error,1.e-10);
 	}
 }
 
@@ -587,14 +535,12 @@ BOOST_AUTO_TEST_CASE( LinAlg_solveSymmSemiDefiniteSystemInPlace_fullRank_Matrix_
 			blas::solveSymmSemiDefiniteSystemInPlace<blas::SolveAXB>(A,AInv);
 			
 			//should be left and right inverse
-			RealMatrix resultLeft(Dimensions,Dimensions);
-			RealMatrix resultRight(Dimensions,Dimensions);
-			axpy_prod(AInv,A,resultLeft);
-			axpy_prod(A,AInv,resultRight);
+			RealMatrix resultLeft = prod(AInv,A);
+			RealMatrix resultRight = prod(A,AInv);
 			
 			double errorSame = norm_inf(resultLeft-resultRight);
-			double errorLeft = norm_inf(resultLeft - RealIdentityMatrix(Dimensions));
-			double errorRight = norm_inf(resultRight - RealIdentityMatrix(Dimensions));
+			double errorLeft = norm_inf(resultLeft - blas::identity_matrix<double>(Dimensions));
+			double errorRight = norm_inf(resultRight - blas::identity_matrix<double>(Dimensions));
 			BOOST_CHECK_SMALL(errorSame,1.e-13);
 			BOOST_CHECK_SMALL(errorLeft,1.e-10);
 			BOOST_CHECK_SMALL(errorRight,1.e-10);
@@ -608,14 +554,12 @@ BOOST_AUTO_TEST_CASE( LinAlg_solveSymmSemiDefiniteSystemInPlace_fullRank_Matrix_
 			blas::solveSymmSemiDefiniteSystemInPlace<blas::SolveXAB>(A,AInv);
 			
 			//should be left and right inverse
-			RealMatrix resultLeft(Dimensions,Dimensions);
-			RealMatrix resultRight(Dimensions,Dimensions);
-			axpy_prod(AInv,A,resultLeft);
-			axpy_prod(A,AInv,resultRight);
+			RealMatrix resultLeft = prod(AInv,A);
+			RealMatrix resultRight = prod(A,AInv);
 			
 			double errorSame = norm_inf(resultLeft-resultRight);
-			double errorLeft = norm_inf(resultLeft - RealIdentityMatrix(Dimensions));
-			double errorRight = norm_inf(resultRight - RealIdentityMatrix(Dimensions));
+			double errorLeft = norm_inf(resultLeft - blas::identity_matrix<double>(Dimensions));
+			double errorRight = norm_inf(resultRight - blas::identity_matrix<double>(Dimensions));
 			BOOST_CHECK_SMALL(errorSame,1.e-13);
 			BOOST_CHECK_SMALL(errorLeft,1.e-10);
 			BOOST_CHECK_SMALL(errorRight,1.e-10);
@@ -839,7 +783,7 @@ BOOST_AUTO_TEST_CASE( LinAlg_generalSolveSystemInPlace_Rectangular1_RankK ){
 			for(std::size_t i = 0; i != M; ++i){
 				row(temp,i) *= lambda(i);
 			}
-			axpy_prod(QM,temp,A);
+			noalias(A) = prod(QM,temp);
 		}
 		RealMatrix AInv(N,M);
 		{
@@ -847,7 +791,7 @@ BOOST_AUTO_TEST_CASE( LinAlg_generalSolveSystemInPlace_Rectangular1_RankK ){
 			for(std::size_t i = 0; i != M; ++i){
 				column(temp,i) *= lambdaInv(i);
 			}
-			axpy_prod(temp,trans(QM),AInv);
+			noalias(AInv) = prod(temp,trans(QM));
 		}
 		
 		RealVector bM(M);
@@ -908,7 +852,7 @@ BOOST_AUTO_TEST_CASE( LinAlg_generalSolveSystemInPlace_Rectangular2_RankK ){
 			for(std::size_t i = 0; i != N; ++i){
 				column(temp,i) *= lambda(i);
 			}
-			axpy_prod(temp,QN,A);
+			noalias(A) = prod(temp,QN);
 		}
 		RealMatrix AInv(N,M);
 		{
@@ -916,7 +860,7 @@ BOOST_AUTO_TEST_CASE( LinAlg_generalSolveSystemInPlace_Rectangular2_RankK ){
 			for(std::size_t i = 0; i != N; ++i){
 				row(temp,i) *= lambdaInv(i);
 			}
-			axpy_prod(trans(QN),temp,AInv);
+			noalias(AInv) = prod(trans(QN),temp);
 		}
 		
 		RealVector bM(M);

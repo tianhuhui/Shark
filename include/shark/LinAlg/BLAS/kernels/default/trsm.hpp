@@ -31,8 +31,7 @@
 #ifndef SHARK_LINALG_BLAS_KERNELS_ATLAS_TRSM_HPP
 #define SHARK_LINALG_BLAS_KERNELS_ATLAS_TRSM_HPP
 
-#include "../../matrix_proxy.hpp"
-#include "../../vector_expression.hpp"
+#include "../../expression_types.hpp"
 #include <boost/mpl/bool.hpp>
 
 namespace shark {namespace blas {namespace bindings {
@@ -42,7 +41,7 @@ namespace shark {namespace blas {namespace bindings {
 // Lower triangular(column major) - matrix
 template<bool Unit, class MatA, class MatB>
 void trsm_impl(
-	matrix_expression<MatA> const& A, matrix_expression<MatB>& B, 
+	matrix_expression<MatA, cpu_tag> const& A, matrix_expression<MatB, cpu_tag>& B, 
 	boost::mpl::false_, column_major
 ) {
 	SIZE_CHECK(A().size1() == A().size2());
@@ -53,14 +52,14 @@ void trsm_impl(
 	std::size_t size1 = B().size1();
 	std::size_t size2 = B().size2();
 	for (std::size_t n = 0; n < size1; ++ n) {
-		matrix_column<MatA const> columnTriangular = column(A(),n);
+		auto  columnTriangular = column(A(),n);
 		for (std::size_t l = 0; l < size2; ++ l) {
 			if(!Unit){
 				RANGE_CHECK(A()(n, n) != value_type());//matrix is singular
 				B()(n, l) /= A()(n, n);
 			}
 			if (B()(n, l) != value_type/*zero*/()) {
-				matrix_column<MatB> columnMatrix = column(B(),l);
+				auto columnMatrix = column(B(),l);
 				noalias(subrange(columnMatrix,n+1,size1)) -= B()(n,l) * subrange(columnTriangular,n+1,size1);
 			}
 		}
@@ -69,7 +68,7 @@ void trsm_impl(
 // Lower triangular(row major) - matrix
 template<bool Unit, class MatA, class MatB>
 void trsm_impl(
-	matrix_expression<MatA> const& A, matrix_expression<MatB>& B, 
+	matrix_expression<MatA, cpu_tag> const& A, matrix_expression<MatB, cpu_tag>& B, 
 	boost::mpl::false_, row_major
 ) {
 	SIZE_CHECK(A().size1() == A().size2());
@@ -92,7 +91,7 @@ void trsm_impl(
 //Upper triangular(column major) - matrix
 template<bool Unit, class MatA, class MatB>
 void trsm_impl(
-	matrix_expression<MatA> const& A, matrix_expression<MatB>& B,
+	matrix_expression<MatA, cpu_tag> const& A, matrix_expression<MatB, cpu_tag>& B,
         boost::mpl::true_, column_major
 ) {
 	SIZE_CHECK(A().size1() == A().size2());
@@ -104,14 +103,14 @@ void trsm_impl(
 	std::size_t size2 = B().size2();
 	for (std::size_t i = 0; i < size1; ++ i) {
 		std::size_t n = size1-i-1;
-		matrix_column<MatA const> columnTriangular = column(A(),n);
+		auto columnTriangular = column(A(),n);
 		if(!Unit){
 			RANGE_CHECK(A()(n, n) != value_type());//matrix is singular
 			row(B(),n) /= A()(n, n);
 		}
 		for (std::size_t l = 0; l < size2; ++ l) {
 			if (B()(n, l) != value_type/*zero*/()) {
-				matrix_column<MatB> columnMatrix = column(B(),l);
+				auto columnMatrix = column(B(),l);
 				noalias(subrange(columnMatrix,0,n)) -= B()(n,l) * subrange(columnTriangular,0,n);
 			}
 		}
@@ -121,7 +120,7 @@ void trsm_impl(
 //Upper triangular(row major) - matrix
 template<bool Unit, class MatA, class MatB>
 void trsm_impl(
-	matrix_expression<MatA> const& A, matrix_expression<MatB>& B,
+	matrix_expression<MatA, cpu_tag> const& A, matrix_expression<MatB, cpu_tag>& B,
         boost::mpl::true_, row_major
 ) {
 	SIZE_CHECK(A().size1() == A().size2());
@@ -142,16 +141,16 @@ void trsm_impl(
 	}
 }
 
-template <bool Upper, bool Unit,typename TriangularA, typename MatB>
+template <bool Upper, bool Unit,typename MatA, typename MatB>
 void trsm(
-	matrix_expression<TriangularA> const& A,
-	matrix_expression<MatB>& B,
+	matrix_expression<MatA, cpu_tag> const& A,
+	matrix_expression<MatB, cpu_tag>& B,
 	boost::mpl::false_
 ){
 	trsm_impl<Unit>(
 		A,B,
 		boost::mpl::bool_<Upper>(),
-		typename TriangularA::orientation()
+		typename MatA::orientation()
 	);
 }
 

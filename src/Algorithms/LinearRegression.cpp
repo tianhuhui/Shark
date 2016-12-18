@@ -59,20 +59,20 @@ void LinearRegression::train(LinearModel<>& model, LabeledData<RealVector, RealV
 	typedef LabeledData<RealVector, RealVector>::const_batch_reference BatchRef;
 	for (std::size_t b=0; b != numBatches; b++){
 		BatchRef batch = dataset.batch(b);
-		symm_prod(trans(batch.input),Ablocks.upperLeft(),false);
+		noalias(Ablocks.upperLeft()) += prod(trans(batch.input),batch.input);
 		noalias(column(Ablocks.upperRight(),0))+=sum_rows(batch.input);
 	}
 	row(Ablocks.lowerLeft(),0) = column(Ablocks.upperRight(),0);
 	matA(inputDim,inputDim) = numInputs;
 	//X^TX+=lambda* I
-	diag(Ablocks.upperLeft())+= m_regularization;
+	diag(Ablocks.upperLeft()) += m_regularization;
 	
 	
 	//we also need to compute X^T L= (P^TL, 1^T L) where L is the matrix of labels 
 	RealMatrix XTL(inputDim + 1,outputDim,0.0);
 	for (std::size_t b=0; b != numBatches; b++){
 		BatchRef batch = dataset.batch(b);
-		RealSubMatrix PTL = subrange(XTL,0,inputDim,0,outputDim);
+		auto PTL = subrange(XTL,0,inputDim,0,outputDim);
 		noalias(PTL) += prod(trans(batch.input),batch.label);
 		noalias(row(XTL,inputDim))+=sum_rows(batch.label);
 	}	
